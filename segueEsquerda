@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+import rospy
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import LaserScan
+import time
+
+turnTime=10
+timeToGoForward=2
+timeToSpin=1.5
+
+sizeList=20
+distanciasSL=[0.1 for _ in range(sizeList)]
+aux=0
+distL=0
+distanciasS=[0.25 for _ in range(sizeList)]
+dist=0
+
+def scan(msg):
+    global aux,distL,distanciasSL,dist,distanciasS
+    distanciasSL[aux]=msg.ranges[2]
+    distanciasS[aux]=min(0.25,msg.ranges[1])
+    distL=sum(distanciasSL)/len(distanciasSL)
+    dist=sum(distanciasS)/len(distanciasS)
+    aux+=1
+    if aux>=sizeList: aux=0
+
+def turn(pub):
+    twist=Twist()
+    twist.linear.x = 0.13
+    start = time.time()
+    rate = rospy.Rate(20)
+    while time.time() - start < timeToGoForward and not rospy.is_shutdown():
+        pub.publish(twist)
+        rate.sleep()
+    twist = Twist()
+    twist.angular.z = 2
+    start = time.time()
+    while time.time() - start < timeToSpin and not rospy.is_shutdown():
+        pub.publish(twist)
+        rate.sleep()
+
+def main():
+    rospy.init_node("left_wall_follower")
+
+    rospy.Subscriber("/scan",LaserScan, scan)
+
+    pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
+
+    rate = rospy.Rate(20)
+    move = Twist()
+
+    rospy.loginfo("Seguidor de parede esquerda INICIADO!")
+
+    while not rospy.is_shutdown():
+
+        # 1 — PAREDE NA FRENTE → virar 90° para DIREITA
+        if distL > 0.12:
+            rospy.loginfo("Sem parede, virando pra esquerda")
+            turn(pub)
+            continue
+
+        '''# 3 — Caso normal: seguir reto ao lado da parede
+        move.linear.x = FORWARD_SPEED
+        move.angular.z = 0.0
+        pub.publish(move)'''
+        rate.sleep()
+
+if __name__ == "__main__":
+    try:
+        main()
+    except rospy.ROSInterruptException:
+        pass
